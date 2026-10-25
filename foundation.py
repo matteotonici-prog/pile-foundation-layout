@@ -139,7 +139,7 @@ def design_foundation(
     pile_capacity,
     spacing_factor,
     pile_diameter,
-    load_increase_percent
+    load_increase_percent=0
 ):
 
     service_load = (
