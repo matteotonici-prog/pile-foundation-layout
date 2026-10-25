@@ -1,19 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# ==================================================
-# STANDARD PILE ARRANGEMENTS
-# ==================================================
+# ====================================================
+# STANDARD PILE PATTERNS
+# 1 UNIT = 1 PILE SPACING
+# ====================================================
 
 PILE_PATTERNS = {
 
     1: [
-        (0.0, 0.0)
+        (0, 0)
     ],
 
     2: [
-        (-0.5, 0.0),
-        (0.5, 0.0)
+        (-0.5, 0),
+        (0.5, 0)
     ],
 
     3: [
@@ -29,7 +30,6 @@ PILE_PATTERNS = {
         (0.5, 0.5)
     ],
 
-    # Central pile
     5: [
         (-0.5, -0.5),
         (0.5, -0.5),
@@ -47,7 +47,6 @@ PILE_PATTERNS = {
         (1.0, 0.5)
     ],
 
-    # Hexagon + centre pile
     7: [
         (0.0, 0.0),
         (1.0, 0.0),
@@ -69,7 +68,6 @@ PILE_PATTERNS = {
         (1.5, 0.5)
     ],
 
-    # 3x3 grid with central pile
     9: [
         (-1.0, -1.0),
         (0.0, -1.0),
@@ -83,34 +81,26 @@ PILE_PATTERNS = {
     ]
 }
 
+# ====================================================
+# REQUIRED PILES
+# ====================================================
 
-# ==================================================
-# REQUIRED NUMBER OF PILES
-# ==================================================
-
-def required_piles(load_kn, pile_capacity_kn):
+def required_piles(load, capacity):
 
     n = 1
 
     while True:
 
-        total_load = load_kn + n * 50.0
+        total_load = load + n * 50.0
 
-        load_per_pile = total_load / n
-
-        if load_per_pile <= pile_capacity_kn:
+        if total_load / n <= capacity:
             return n
 
         n += 1
 
-        if n > 100:
-            raise ValueError("Unable to determine pile count")
-
-
-# ==================================================
+# ====================================================
 # PILE REACTIONS
-# N + Mx + My
-# ==================================================
+# ====================================================
 
 def calculate_pile_reactions(
     coordinates,
@@ -129,27 +119,27 @@ def calculate_pile_reactions(
         total_load / n
     )
 
-    iy = np.sum(x ** 2)
     ix = np.sum(y ** 2)
+    iy = np.sum(x ** 2)
 
-    if abs(ix) > 1e-9:
+    if ix > 0:
         reactions += mx * y / ix
 
-    if abs(iy) > 1e-9:
+    if iy > 0:
         reactions += my * x / iy
 
     return reactions.tolist()
 
-
-# ==================================================
-# MAIN FOUNDATION DESIGN
-# ==================================================
+# ====================================================
+# FOUNDATION DESIGN
+# ====================================================
 
 def design_foundation(
     row,
     pile_capacity,
     spacing_factor,
-    pile_diameter
+    pile_diameter,
+    load_increase_percent
 ):
 
     service_load = (
@@ -158,35 +148,39 @@ def design_foundation(
         + float(row["Wind Load"])
     )
 
+    service_load *= (
+        1.0 + load_increase_percent / 100.0
+    )
+
     mx = float(row["Moment X"])
     my = float(row["Moment Y"])
 
-    n_piles = required_piles(
+    n = required_piles(
         service_load,
         pile_capacity
     )
 
-    if n_piles > 9:
+    if n > 9:
         raise ValueError(
-            "Current version only supports up to 9 piles."
+            "More than 9 piles required"
         )
 
-    spacing = (
+    pile_spacing = (
         pile_diameter / 1000.0
     ) * spacing_factor
 
     coordinates = []
 
-    for x, y in PILE_PATTERNS[n_piles]:
+    for x, y in PILE_PATTERNS[n]:
 
         coordinates.append(
             (
-                x * spacing,
-                y * spacing
+                x * pile_spacing,
+                y * pile_spacing
             )
         )
 
-    total_load = service_load + n_piles * 50.0
+    total_load = service_load + n * 50.0
 
     reactions = calculate_pile_reactions(
         coordinates,
@@ -194,9 +188,6 @@ def design_foundation(
         mx,
         my
     )
-
-    max_reaction = max(reactions)
-    min_reaction = min(reactions)
 
     return {
 
@@ -207,21 +198,20 @@ def design_foundation(
 
         "Load": total_load,
 
-        "Piles": n_piles,
+        "Piles": n,
 
         "Coordinates": coordinates,
 
-        "Pile Reactions": reactions,
+        "Max Pile Load": max(reactions),
 
-        "Max Pile Load": max_reaction,
+        "Min Pile Load": min(reactions),
 
-        "Min Pile Load": min_reaction
+        "Pile Reactions": reactions
     }
 
-
-# ==================================================
-# INDIVIDUAL FOUNDATION PLOT
-# ==================================================
+# ====================================================
+# FOUNDATION PLOT
+# ====================================================
 
 def plot_foundation(foundation):
 
@@ -242,92 +232,72 @@ def plot_foundation(foundation):
     ax.scatter(
         x,
         y,
-        s=600,
-        c="steelblue",
-        edgecolors="black"
+        s=500,
+        color="steelblue"
     )
 
     ax.scatter(
         0,
         0,
         s=250,
-        c="red",
-        marker="s",
-        label="Column"
+        color="red",
+        marker="s"
     )
-
-    for i, (xp, yp) in enumerate(zip(x, y)):
-
-        ax.text(
-            xp,
-            yp,
-            str(i + 1),
-            fontsize=9,
-            ha="center",
-            va="center"
-        )
-
-    ax.set_title(
-        f"Foundation {foundation['Column ID']}"
-    )
-
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
 
     ax.grid(True)
 
     ax.set_aspect("equal")
 
+    ax.set_title(
+        foundation["Column ID"]
+    )
+
     return fig
 
-
-# ==================================================
-# WHOLE BUILDING FOUNDATION PLAN
-# ==================================================
+# ======================================
+# BUILDING PLAN
+# ====================================================
 
 def plot_building_plan(results):
 
     fig, ax = plt.subplots(
-        figsize=(12, 8)
+        figsize=(10, 8)
     )
 
-    for foundation in results:
+    for f in results:
 
-        column_x = foundation["X"]
-        column_y = foundation["Y"]
+        x0 = f["X"]
+        y0 = f["Y"]
 
         ax.scatter(
-            column_x,
-            column_y,
-            s=150,
-            c="red",
+            x0,
+            y0,
+            s=80,
+            color="red",
             marker="s"
         )
 
         ax.text(
-            column_x,
-            column_y,
-            foundation["Column ID"]
+            x0,
+            y0,
+            f["Column ID"]
         )
 
-        for px, py in foundation["Coordinates"]:
+        for px, py in f["Coordinates"]:
 
             ax.scatter(
-                column_x + px,
-                column_y + py,
-                s=70,
-                c="steelblue"
+                x0 + px,
+                y0 + py,
+                s=50,
+                color="steelblue"
             )
 
-    ax.set_title(
-        "Building Foundation Layout"
-    )
-
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
+    ax.set_aspect("equal")
 
     ax.grid(True)
 
-    ax.set_aspect("equal")
+    ax.set_title(
+        "Foundation Layout Plan"
+    )
 
     return fig
