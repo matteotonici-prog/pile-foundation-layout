@@ -7,10 +7,6 @@ from foundation import (
     plot_building_plan
 )
 
-# --------------------------------------------------
-# PAGE SETTINGS
-# --------------------------------------------------
-
 st.set_page_config(
     page_title="Pile Foundation Layout Generator",
     layout="wide"
@@ -18,28 +14,25 @@ st.set_page_config(
 
 st.title("Pile Foundation Layout Generator")
 
-st.write(
-    "Upload an Excel file containing column loads and pile properties."
-)
+st.sidebar.header("Design Parameters")
 
-# --------------------------------------------------
-# FILE UPLOAD
-# --------------------------------------------------
+load_increase_percent = st.sidebar.number_input(
+    "Additional Load Increase (%)",
+    min_value=0.0,
+    max_value=100.0,
+    value=10.0,
+    step=1.0
+)
 
 uploaded_file = st.file_uploader(
     "Upload Excel File",
     type=["xlsx"]
 )
 
-# --------------------------------------------------
-# RUN DESIGN
-# --------------------------------------------------
-
 if uploaded_file is not None:
 
     try:
 
-        # Read Excel sheets
         columns_df = pd.read_excel(
             uploaded_file,
             sheet_name="Columns"
@@ -50,7 +43,6 @@ if uploaded_file is not None:
             sheet_name="PileProperties"
         )
 
-        # Extract pile properties
         pile_capacity = float(
             pile_df.loc[
                 pile_df["Parameter"] == "Compression Capacity",
@@ -72,7 +64,6 @@ if uploaded_file is not None:
             ].iloc[0]
         )
 
-        # Store results
         results = []
 
         for _, row in columns_df.iterrows():
@@ -81,48 +72,33 @@ if uploaded_file is not None:
                 row=row,
                 pile_capacity=pile_capacity,
                 spacing_factor=spacing_factor,
-                pile_diameter=pile_diameter
+                pile_diameter=pile_diameter,
+                load_increase_percent=load_increase_percent
             )
 
             results.append(foundation)
 
-        # --------------------------------------------------
-        # SCHEDULE
-        # --------------------------------------------------
-
         schedule = pd.DataFrame([
             {
-                "Column ID": r["Column ID"],
-                "X": r["X"],
-                "Y": r["Y"],
-                "Load (kN)": round(r["Load"], 1),
-                "No. Piles": r["Piles"],
-                "Max Pile Load (kN)": r["Max Pile Load"],
-                "Min Pile Load (kN)": r["Min Pile Load"]
+                "Column ID": f["Column ID"],
+                "X": f["X"],
+                "Y": f["Y"],
+                "Total Load (kN)": round(f["Load"], 1),
+                "No. Piles": f["Piles"],
+                "Max Pile Load (kN)": round(f["Max Pile Load"], 1),
+                "Min Pile Load (kN)": round(f["Min Pile Load"], 1)
             }
-            for r in results
+            for f in results
         ])
 
         st.subheader("Foundation Schedule")
-
-        st.dataframe(
-            schedule,
-            use_container_width=True
-        )
-
-        # --------------------------------------------------
-        # BUILDING PLAN
-        # --------------------------------------------------
+        st.dataframe(schedule, use_container_width=True)
 
         st.subheader("Building Foundation Plan")
 
         fig_plan = plot_building_plan(results)
 
         st.pyplot(fig_plan)
-
-        # --------------------------------------------------
-        # FOUNDATION VIEWER
-        # --------------------------------------------------
 
         st.subheader("Individual Foundation")
 
@@ -136,68 +112,47 @@ if uploaded_file is not None:
             if f["Column ID"] == selected_column
         )
 
-        col1, col2 = st.columns([2, 1])
+        col1, col2 = st.columns([3, 1])
 
         with col1:
 
-            fig_foundation = plot_foundation(
+            fig = plot_foundation(
                 selected_foundation
             )
 
-            st.pyplot(fig_foundation)
+            st.pyplot(fig)
 
         with col2:
 
-            st.markdown("### Foundation Details")
+            st.markdown("### Summary")
 
             st.write(
-                f"**Column:** {selected_foundation['Column ID']}"
+                f"**Piles:** {selected_foundation['Piles']}"
             )
 
             st.write(
-                f"**Number of Piles:** {selected_foundation['Piles']}"
+                f"**Load:** {selected_foundation['Load']:.1f} kN"
             )
 
             st.write(
-                f"**Foundation Load:** "
-                f"{selected_foundation['Load']:.1f} kN"
-            )
-
-            st.write(
-                f"**Maximum Pile Reaction:** "
+                f"**Max Reaction:** "
                 f"{selected_foundation['Max Pile Load']:.1f} kN"
             )
 
             st.write(
-                f"**Minimum Pile Reaction:** "
+                f"**Min Reaction:** "
                 f"{selected_foundation['Min Pile Load']:.1f} kN"
             )
 
-        # --------------------------------------------------
-        # DOWNLOAD RESULTS
-        # --------------------------------------------------
-
-        st.subheader("Download Schedule")
-
-        csv = schedule.to_csv(
-            index=False
-        ).encode("utf-8")
-
-        st.download_button(
-            label="Download CSV Schedule",
-            data=csv,
-            file_name="foundation_schedule.csv",
-            mime="text/csv"
-        )
+            st.write(
+                f"**Load Increase:** "
+                f"{load_increase_percent:.1f}%"
+            )
 
     except Exception as e:
 
-        st.error(
-            f"Error reading file: {e}"
-        )
+        st.error(f"Error: {e}")
 
 else:
 
-    st.info(
-        "Upload an Excel file to begin."
-    )
+    st.info("Upload an Excel file to begin.")
