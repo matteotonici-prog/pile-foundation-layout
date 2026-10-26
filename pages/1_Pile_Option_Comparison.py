@@ -223,7 +223,7 @@ else:
     overlaps = overlapping_caps(results)
     in_overlap = {c for pair in overlaps for c in pair}
     norm = Normalize(vmin=0.0, vmax=1.2)
-    cmap = cm.get_cmap("RdYlGn_r")
+    cmap = plt.get_cmap("RdYlGn_r")
 
     fig, ax = plt.subplots(figsize=(11, 8))
     for f in results:
