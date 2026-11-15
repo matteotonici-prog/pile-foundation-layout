@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from matplotlib import cm
 from matplotlib.colors import Normalize
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Circle, Polygon
 
 from comparison import (
     METRICS,
@@ -63,7 +63,6 @@ default_options = pd.DataFrame({
 options_df = st.data_editor(
     default_options,
     num_rows="dynamic",
-    use_container_width=True,
     key="options_editor",
 )
 
@@ -164,7 +163,6 @@ def highlight_best(_):
 
 st.dataframe(
     text_table.style.apply(highlight_best, axis=None),
-    use_container_width=True,
     height=36 * (len(METRICS) + 1),
 )
 
@@ -199,14 +197,13 @@ st.subheader("5. Column by column")
 piles_tbl, util_tbl = per_column_tables(runs, columns_df)
 tab_piles, tab_util = st.tabs(["Piles per column", "Max pile utilisation (%)"])
 with tab_piles:
-    st.dataframe(piles_tbl, use_container_width=True)
+    st.dataframe(piles_tbl)
 with tab_util:
     st.caption("Highest pile load / capacity in each group, including moments. Above 100% = overstressed.")
     st.dataframe(
         util_tbl.style
         .background_gradient(cmap="RdYlGn_r", vmin=40, vmax=120, axis=None)
-        .format("{:.0f}"),
-        use_container_width=True,
+        .format("{:.0f}")
     )
 
 # =====================================================
@@ -228,8 +225,8 @@ else:
     fig, ax = plt.subplots(figsize=(11, 8))
     for f in results:
         x0, y0, x1, y1 = f["Bbox"]
-        ax.add_patch(Rectangle(
-            (x0, y0), x1 - x0, y1 - y0, fill=False,
+        ax.add_patch(Polygon(
+            f["Cap"], closed=True, fill=False,
             edgecolor="red" if f["Column ID"] in in_overlap else "grey",
             linewidth=1.8 if f["Column ID"] in in_overlap else 1.0,
         ))
@@ -289,8 +286,9 @@ with st.expander("Assumptions"):
         "- Pile number is found from vertical load only; moments are then used to get "
         "the max/min pile load, so a pile can exceed 100% even though the count was 'enough'.\n"
         "- Max 9 piles per column (largest pattern in `foundation.py`).\n"
-        "- Cap size is the bounding rectangle of the piles plus the edge distance; "
-        "overlap checks compare these rectangles in plan.\n"
+        "- Cap outline: 3 piles = triangle with flat ends; other counts = rectangle "
+        "around the piles. Edge distance is measured from the pile centres. "
+        "Overlap checks use these outlines in plan.\n"
         "- Units: kN, kNm, metres for X/Y, mm for diameter.\n"
         "- Cost index is only a relative indicator from the rates in the sidebar."
     )
